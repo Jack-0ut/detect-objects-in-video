@@ -91,20 +91,17 @@ class YolosDetection(ObjectDetection):
         
         # Get predicted bounding boxes and other information
         target_sizes = torch.tensor([image.size[::-1]])  # Reverse to (height, width)
-        results = self.image_processor.post_process_object_detection(outputs, threshold=0.9, target_sizes=target_sizes)[0]
+        results = self.image_processor.post_process_object_detection(outputs, threshold=0.7, target_sizes=target_sizes)[0]
         
         # Return bounding boxes
         return [[round(coord, 2) for coord in box.tolist()] for box in results["boxes"]]
 
-    def draw_bounding_boxes(self, image, bounding_boxes, width, height):
-        """Draw bounding boxes on the image for YOLOS."""
+    def draw_bounding_boxes(self, image, bounding_boxes):
+        """Draw bounding boxes on the image."""
         for box in bounding_boxes:
-            xmin, ymin, xmax, ymax = box
             # Convert normalized coordinates to pixel coordinates
-            xmin_pixel = int(xmin * width)
-            ymin_pixel = int(ymin * height)
-            xmax_pixel = int(xmax * width)
-            ymax_pixel = int(ymax * height)
+            xmin, ymin, xmax, ymax = box
+            xmin_pixel, ymin_pixel, xmax_pixel, ymax_pixel = map(int, (xmin, ymin, xmax, ymax))
 
             # Draw bounding box
             cv2.rectangle(image, (xmin_pixel, ymin_pixel), (xmax_pixel, ymax_pixel), (0, 0, 255), 2)
