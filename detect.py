@@ -36,46 +36,38 @@ class ObjectDetection:
         """
         raise NotImplementedError("Subclasses must implement detect_objects()")
 
-    def draw_bounding_boxes(self, image: np.ndarray, bounding_boxes: List[List[float]], width: int, height: int) -> np.ndarray:
+    def draw_bounding_boxes(self, image: np.ndarray, bounding_boxes: List[List[int]]) -> np.ndarray:
         """
         Draw bounding boxes on the image.
 
         Args:
-            image (np.ndarray): The input image (in BGR format) on which bounding boxes will be drawn.
-            bounding_boxes (List[List[float]]): A list of bounding boxes, where each box is in the format
-                                                 [ymin, xmin, ymax, xmax] with normalized coordinates.
-            width (int): The width of the image.
-            height (int): The height of the image.
+            image (np.ndarray): The input image (in BGR format).
+            bounding_boxes (List[List[int]]): List of bounding boxes in absolute pixel values [ymin, xmin, ymax, xmax].
         
         Returns:
             np.ndarray: The image with bounding boxes drawn.
         """
-        raise NotImplementedError("Subclasses must implement draw_bounding_boxes()")
-
+        for ymin, xmin, ymax, xmax in bounding_boxes:
+            cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)  # Draw red box
+        return image
+    
 class GeminiDetection(ObjectDetection):
     """Gemini-specific object detection."""
     def __init__(self):
         super().__init__("Gemini")
 
-    def parse_bounding_boxes(self, response_text):
-        """Parse bounding boxes from Gemini response."""
-        return [[int(y), int(x), int(y2), int(x2)] for y, x, y2, x2 in re.findall(r'(\d+)[,\s]+(\d+)[,\s]+(\d+)[,\s]+(\d+)', response_text)]
+    def parse_bounding_boxes(self, response_text, width, height):
+        """Convert Gemini response (0-1000 normalized) to absolute pixel values."""
+        return [[int((float(y) / 1000) * height), int((float(x) / 1000) * width),
+                 int((float(y2) / 1000) * height), int((float(x2) / 1000) * width)]
+                for y, x, y2, x2 in re.findall(r'(\d+)[,\s]+(\d+)[,\s]+(\d+)[,\s]+(\d+)', response_text)]
 
     def detect_objects(self, image):
         """Detect objects using Gemini."""
+        width, height = image.size
         prompt = "Return bounding boxes for objects in this image in [y_min, x_min, y_max, x_max] format."
         response = client.models.generate_content(model="gemini-1.5-pro", contents=[image, prompt])
-        return self.parse_bounding_boxes(response.text.strip())
-
-    def draw_bounding_boxes(self,image, bounding_boxes, width, height):
-        for ymin, xmin, ymax, xmax in bounding_boxes:
-            xmin_pixel = int((xmin / 1000) * width)
-            ymin_pixel = int((ymin / 1000) * height)
-            xmax_pixel = int((xmax / 1000) * width)
-            ymax_pixel = int((ymax / 1000) * height)
-
-            cv2.rectangle(image, (xmin_pixel, ymin_pixel), (xmax_pixel, ymax_pixel), (0, 0, 255), 2)
-        return image
+        return self.parse_bounding_boxes(response.text.strip(),width, height)
     
 class YolosDetection(ObjectDetection):
     """YOLOS-specific object detection."""
@@ -91,22 +83,10 @@ class YolosDetection(ObjectDetection):
         
         # Get predicted bounding boxes and other information
         target_sizes = torch.tensor([image.size[::-1]])  # Reverse to (height, width)
-        results = self.image_processor.post_process_object_detection(outputs, threshold=0.7, target_sizes=target_sizes)[0]
+        results = self.image_processor.post_process_object_detection(outputs, threshold=0.8, target_sizes=target_sizes)[0]
         
         # Return bounding boxes
-        return [[round(coord, 2) for coord in box.tolist()] for box in results["boxes"]]
-
-    def draw_bounding_boxes(self, image, bounding_boxes):
-        """Draw bounding boxes on the image."""
-        for box in bounding_boxes:
-            # Convert normalized coordinates to pixel coordinates
-            xmin, ymin, xmax, ymax = box
-            xmin_pixel, ymin_pixel, xmax_pixel, ymax_pixel = map(int, (xmin, ymin, xmax, ymax))
-
-            # Draw bounding box
-            cv2.rectangle(image, (xmin_pixel, ymin_pixel), (xmax_pixel, ymax_pixel), (0, 0, 255), 2)
-        
-        return image
+        return [[int(box[1]), int(box[0]), int(box[3]), int(box[2])] for box in results["boxes"].tolist()]  
 
 def get_detection_method(method_name):
     """Factory method to select the detection method."""
