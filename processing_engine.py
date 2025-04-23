@@ -14,67 +14,81 @@ class ProcessingEngine:
         self.logger = DetectionLogger(jsonl_path=log_jsonl)
         self.logger.set_model(self.model)
         self.metadata_store = MetadataStore(save_path=metadata_path)
-        self.frames = {}  # For optional caching of specific frames
+        self.frames = {} 
 
     def download_stream_url(self):
         with YoutubeDL({'format': 'best'}) as ydl:
             info = ydl.extract_info(self.video_url, download=False)
             return info['url']
 
-    def run(self):
+    def run(self, stream_mode=True):
         stream_url = self.download_stream_url()
-        cap = cv2.VideoCapture(stream_url)
-        if not cap.isOpened():
-            raise RuntimeError("Failed to open video stream.")
-
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_delay = 1 / fps if fps > 0 else 1 / 30
-
         frame_count = 0
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+        if stream_mode:
+            cap = cv2.VideoCapture(stream_url)
+            if not cap.isOpened():
+                raise RuntimeError("Failed to open video stream.")
 
-            frame_count += 1
-            results = self.model.track(source=frame, persist=True, conf=0.5, stream=False)
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_delay = 1 / fps if fps > 0 else 1 / 30
 
-            if results and len(results) > 0:
-                result = results[0]
-                vis_frame = result.plot()
-                inference_time = result.speed.get("inference", 0)
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
 
-                self.logger.log(
-                    frame_number=frame_count,
-                    inference_time=inference_time,
-                    boxes=result.boxes
-                )
+                frame_count += 1
+                results = self.model.track(source=frame, persist=True, conf=0.5, stream=False)
+                result = results[0] if results else None
 
-                object_data = []
-                for box in result.boxes:
-                    cls_id = int(box.cls[0]) if hasattr(box, 'cls') else 0
-                    cls_name = self.model.names.get(cls_id, f"class_{cls_id}")
-                    object_data.append({"class": cls_name})
+                if result:
+                    self._handle_result(result, frame_count)
 
-                timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                self.metadata_store.add_frame(
-                    frame_number=frame_count,
-                    timestamp=timestamp,
-                    inference_time=inference_time,
-                    objects=object_data
-                )
+                cv2.imshow("YOLOv8 Tracking", result.plot() if result else frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
 
-            cv2.imshow("YOLOv8 Real-Time Tracking", vis_frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+                time.sleep(frame_delay)
 
-            time.sleep(frame_delay)
+            cap.release()
+
+        else:
+            results = self.model.track(source=stream_url, persist=True, conf=0.5, stream=True)
+
+            for result in results:
+                frame_count += 1
+                self._handle_result(result, frame_count)
+
+                cv2.imshow("YOLOv8 Tracking", result.plot())
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
 
         self.logger.close()
         self.metadata_store.save()
-        cap.release()
         cv2.destroyAllWindows()
+
+    def _handle_result(self, result, frame_number):
+        """Handle the result of the YOLO model and log metadata"""
+        inference_time = result.speed.get("inference", 0)
+        self.logger.log(frame_number, inference_time, result.boxes)
+        self._log_metadata(frame_number, inference_time, result.boxes)
+
+    def _log_metadata(self, frame_number, inference_time, boxes):
+        """Log a single frame's metadata"""
+        object_data = []
+        for box in boxes:
+            cls_id = int(box.cls[0]) if hasattr(box, 'cls') else 0
+            cls_name = self.model.names.get(cls_id, f"class_{cls_id}")
+            object_data.append({"class": cls_name})
+
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.metadata_store.add_frame(
+            frame_number=frame_number,
+            timestamp=timestamp,
+            inference_time=inference_time,
+            objects=object_data
+        )
 
     def extract_frame_with_annotations(self, frame_number):
         """Extract a specific frame and draw bounding boxes from .jsonl logs"""
