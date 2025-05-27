@@ -1,9 +1,10 @@
 import datetime
 import json
 import os
+from config import LOG_JSONL 
 
 class DetectionLogger:
-    def __init__(self, jsonl_path="tracking_data.jsonl"):
+    def __init__(self, jsonl_path=LOG_JSONL):  
         self.jsonl_path = jsonl_path
         self.model = None
 

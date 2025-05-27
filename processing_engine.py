@@ -6,24 +6,18 @@ from logger import DetectionLogger
 from store_metadata import MetadataStore
 from utils.video_source_manager import VideoSourceManager
 from utils.video_player import fit_frame_to_screen
+from config import MODEL_PATH, LOG_JSONL, METADATA_PATH, INFERENCE_PARAMS
 
 class ProcessingEngine:
-    def __init__(self, video_source: str, model_path="yolov8n.pt", log_jsonl="tracking_data.jsonl", metadata_path="tracking_metadata.pkl"):
+    def __init__(self, video_source: str):
         self.source_manager = VideoSourceManager(video_source)
-        self.model = YOLO(model_path)
-        self.logger = DetectionLogger(jsonl_path=log_jsonl)
+        self.model = YOLO(MODEL_PATH)
+        self.logger = DetectionLogger(jsonl_path=LOG_JSONL)
         self.logger.set_model(self.model)
-        self.metadata_store = MetadataStore(save_path=metadata_path)
+        self.metadata_store = MetadataStore(save_path=METADATA_PATH)
         self.frames = {}
 
-        self.inference_params = {
-            "conf": 0.5,
-            "iou": 0.7,
-            "vid_stride": 1,
-            "stream": True,
-            "imgsz": 640,
-            "device": "cpu",
-        }
+        self.inference_params = INFERENCE_PARAMS.copy()
 
     def run(self):
         """Run the YOLO model in batch mode using YOLO's internal video reading with stream=False."""
@@ -105,6 +99,6 @@ class ProcessingEngine:
         return self.metadata_store.search(query, k=k)
     
     def cleanup(self):
-        if self.cap:
+        if hasattr(self, "cap") and self.cap:
             self.cap.release()
             cv2.destroyAllWindows()

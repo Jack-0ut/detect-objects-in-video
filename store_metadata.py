@@ -4,9 +4,10 @@ import numpy as np
 import hashlib
 from collections import Counter
 from sentence_transformers import SentenceTransformer
+from config import EMBEDDING_MODEL, METADATA_SAVE_PATH
 
 class MetadataStore:
-    def __init__(self, embedding_model="all-MiniLM-L6-v2", save_path="metadata.pkl"):
+    def __init__(self, embedding_model=EMBEDDING_MODEL, save_path=METADATA_SAVE_PATH):
         self.model = SentenceTransformer(embedding_model)
         self.save_path = save_path
 
@@ -75,4 +76,4 @@ class MetadataStore:
                 data = pickle.load(f)
                 self.metadata = data["metadata"]
                 self.hash_to_idx = data["hash_to_idx"]
-                self.embeddings = data["embeddings"].tolist()  # back to list of vectors
+                self.embeddings = data["embeddings"].tolist() 
