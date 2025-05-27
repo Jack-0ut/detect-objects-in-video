@@ -1,7 +1,21 @@
-# Model and data paths
+import os
+from datetime import datetime
+
+# Base output directory for all runs
+OUTPUT_BASE_DIR = "outputs"
+
+def get_run_output_dir():
+    """Create and return a unique output directory for the current run."""
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    run_dir = os.path.join(OUTPUT_BASE_DIR, timestamp)
+    os.makedirs(run_dir, exist_ok=True)
+    return run_dir
+
+# Example usage for file paths in a run:
+RUN_OUTPUT_DIR = get_run_output_dir()
 MODEL_PATH = "yolov8n.pt"
-LOG_JSONL = "tracking_data.jsonl"
-METADATA_PATH = "tracking_metadata.pkl"
+LOG_JSONL = os.path.join(RUN_OUTPUT_DIR, "tracking_data.jsonl")
+METADATA_PATH = os.path.join(RUN_OUTPUT_DIR, "tracking_metadata.pkl")
 
 # Inference parameters
 INFERENCE_PARAMS = {
@@ -15,10 +29,4 @@ INFERENCE_PARAMS = {
 
 # Metadata store
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-METADATA_SAVE_PATH = "metadata.pkl"
-
-# UI settings
-VIDEO_FILE_TYPES = ["mp4", "mov", "avi"]
-DEFAULT_QUERY_EXAMPLE = "person walking"
-PAGE_TITLE = "AI Video Processor"
-WINDOW_LAYOUT = "centered"
+METADATA_SAVE_PATH = os.path.join(RUN_OUTPUT_DIR, "metadata.pkl")
